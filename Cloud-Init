@@ -1,0 +1,19 @@
+Cloud-init on Debian
+---
+rm /etc/machine-id
+touch /etc/machine-id
+rm /var/lib/dbus/machine-id
+ln -s /etc/machine-id /var/lib/dbus/machine-id
+
+deluser --remove-home $USER1
+
+apt install tmux htop curl
+apt clean
+[pve webinterface] Hardware-add-create cloud-init drive to enable clould-init
+DO NOT use TEMPLATE format, just leave it as a full-function VM
+
+
+删除LVM SWAP分区，需要更新initramfs
+echo 'UUID=none' > /etc/initramfs-tools/conf.d/resume
+update-initramfs -u
+update-grub
