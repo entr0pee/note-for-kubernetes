@@ -76,33 +76,3 @@ sudo vi /etc/containerd/config.toml
 #Restart containerd with the new configuration
 sudo systemctl restart containerd
 
-
-
-安装kubernetes
-==============
-sudo apt update
-sudo apt install -y apt-transport-https ca-certificates curl
-
-sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
-
-sudo echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
-
-Prepare BINARY of kube
-=======================
-sudo apt update
-sudo apt install -y kubelet kubeadm kubectl
-sudo apt-mark hold kubelet kubeadm kubectl
-
-#prepare to install calico
-sudo kubeadm init --pod-network-cidr=172.10.0.0/16
-
-mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-sudo chown $(id -u):$(id -g) $HOME/.kube/config
-
-Option 1 - Install Calico
-wget https://docs.projectcalico.org/manifests/calico.yaml---记得修改pods-network-cidr
-kubectl apply -f https://docs.projectcalico.org/v3.19/manifests/calico.yaml
-
-Option 1 - Install flunnel
-kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
