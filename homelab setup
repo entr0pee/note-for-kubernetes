@@ -1,0 +1,108 @@
+apt clean
+[pve webinterface] Hardware-add-create cloud-init drive to enable clould-init
+DO NOT convert it to TEMPLATE format, just leave it as a full-function VM
+
+
+#If you need to delete LVM SWAP partition，you have to update initramfs booting image
+echo 'UUID=none' > /etc/initramfs-tools/conf.d/resume
+update-initramfs -u
+update-grub
+
+Start a New VM start
+=====================
+1. disable swap
+sudo swapoff -a
+sudo nano /etc/fstab
+如有必要还需要改ip addr
+
+2.disable cloud-init
+============
+sudo systemctl stop cloud-config cloud-final cloud-init-local cloud-init
+sudo systemctl disable cloud-config cloud-final cloud-init-local cloud-init
+
+Option 1 - 安装docker
+sudo apt install docker.io
+
+Option 2 - 安装Containerd
+#0 - Install Packages 
+#containerd prerequisites, first load two modules and configure them to load on boot
+#https://kubernetes.io/docs/setup/production-environment/container-runtimes/
+sudo modprobe overlay
+sudo modprobe br_netfilter
+
+cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
+overlay
+br_netfilter
+EOF
+
+
+#Setup required sysctl params, these persist across reboots.
+cat <<EOF | sudo tee /etc/sysctl.d/99-kubernetes-cri.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.ipv4.ip_forward                 = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+
+
+#Apply sysctl params without reboot
+sudo sysctl --system
+
+
+#Install containerd
+sudo apt-get update 
+sudo apt-get install -y containerd
+
+
+#Create a containerd configuration file
+sudo mkdir -p /etc/containerd
+sudo containerd config default | sudo tee /etc/containerd/config.toml
+
+
+#Set the cgroup driver for containerd to systemd which is required for the kubelet.
+#For more information on this config file see:
+# https://github.com/containerd/cri/blob/master/docs/config.md and also
+# https://github.com/containerd/containerd/blob/master/docs/ops.md
+
+#At the end of this section
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+        ...
+#Add these two lines, indentation matters.
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+            SystemdCgroup = true
+
+sudo vi /etc/containerd/config.toml
+
+
+#Restart containerd with the new configuration
+sudo systemctl restart containerd
+
+
+
+安装kubernetes
+==============
+sudo apt update
+sudo apt install -y apt-transport-https ca-certificates curl
+
+sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+
+sudo echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+Prepare BINARY of kube
+=======================
+sudo apt update
+sudo apt install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+#prepare to install calico
+sudo kubeadm init --pod-network-cidr=172.10.0.0/16
+
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+Option 1 - Install Calico
+wget https://docs.projectcalico.org/manifests/calico.yaml---记得修改pods-network-cidr
+kubectl apply -f https://docs.projectcalico.org/v3.19/manifests/calico.yaml
+
+Option 1 - Install flunnel
+kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
